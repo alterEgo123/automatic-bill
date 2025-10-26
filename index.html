@@ -8,7 +8,7 @@
     body {
       font-family: sans-serif;
       margin: 2rem;
-      background: #f9f9f9;
+      background: #f8f8f8;
     }
     #editor {
       width: 100%;
@@ -26,50 +26,63 @@
       margin-top: 1rem;
       padding: 8px 16px;
     }
+    #idInput {
+      border: none;
+      border-bottom: 1px solid #aaa;
+      font-weight: bold;
+      width: 120px;
+      outline: none;
+      background: transparent;
+      margin-left: 4px;
+    }
   </style>
 </head>
 <body>
   <h2>📄 DOCX Web Editor</h2>
   <p>
-    Upload a <code>.docx</code> file, view and edit it, then generate a new ID and download.
+    Upload a <code>.docx</code> file, view & edit it, generate an ID, and download.
   </p>
 
-  <input type="file" id="fileInput" accept=".docx" />
-  <div><strong>ID:</strong> <span id="docId"></span></div>
+  <input type="file" id="fileInput" accept=".docx" /><br />
+  <label><strong>ID:</strong>
+    <input id="idInput" type="text" value="" />
+  </label>
 
   <div id="editor" contenteditable="true">Upload a .docx file to start editing.</div>
 
   <button id="saveBtn">💾 Download Edited DOCX</button>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.7.1/mammoth.browser.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/docx/8.0.0/docx.umd.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/docx/8.0.0/docx.umd.min.js"></script>
 
   <script>
     const editor = document.getElementById("editor");
     const fileInput = document.getElementById("fileInput");
-    const idDisplay = document.getElementById("docId");
+    const idInput = document.getElementById("idInput");
     const saveBtn = document.getElementById("saveBtn");
 
-    async function getNextId() {
+    // Get next ID (using localStorage as simple storage)
+    function getNextId() {
       const year = new Date().getFullYear();
-      const response = await fetch("counter.json");
-      let counterData = { year, counter: 0 };
+      const saved = JSON.parse(localStorage.getItem("counterData") || "{}");
+      let counter = 0;
 
-      if (response.ok) {
-        counterData = await response.json();
-      }
-
-      if (counterData.year !== year) {
-        counterData = { year, counter: 1 };
+      if (saved.year === year) {
+        counter = saved.counter + 1;
       } else {
-        counterData.counter += 1;
+        counter = 1;
       }
 
-      idDisplay.textContent = `${counterData.counter}/${year}`;
-      // Save updated counter locally
-      localStorage.setItem("counterData", JSON.stringify(counterData));
+      const newData = { year, counter };
+      localStorage.setItem("counterData", JSON.stringify(newData));
+      return `${counter}/${year}`;
+    }
 
-      return counterData;
+    // Try to load saved counter on page load
+    function restoreId() {
+      const saved = JSON.parse(localStorage.getItem("counterData") || "{}");
+      if (saved.year && saved.counter)
+        idInput.value = `${saved.counter}/${saved.year}`;
     }
 
     async function loadFile(file) {
@@ -78,8 +91,8 @@
         const arrayBuffer = e.target.result;
         const result = await window.mammoth.convertToHtml({ arrayBuffer });
         editor.innerHTML = result.value;
-
-        await getNextId();
+        // Assign new auto ID
+        idInput.value = getNextId();
       };
       reader.readAsArrayBuffer(file);
     }
@@ -91,23 +104,22 @@
 
     saveBtn.addEventListener("click", async () => {
       const { Document, Packer, Paragraph } = window.docx;
-      const text = editor.innerText;
-      const lines = text.split("\n").map(line => new Paragraph(line));
 
-      const doc = new Document({ sections: [{ children: lines }] });
+      const text = editor.innerText;
+      const lines = text.split("\n").map((line) => new Paragraph(line));
+
+      const doc = new Document({
+        sections: [{ children: [new Paragraph("ID: " + idInput.value), ...lines] }],
+      });
+
       const blob = await Packer.toBlob(doc);
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = "edited.docx";
+      a.download = `edited-${idInput.value.replace("/", "-")}.docx`;
       a.click();
     });
 
-    // Restore counter if exists
-    const savedCounter = localStorage.getItem("counterData");
-    if (savedCounter) {
-      const { year, counter } = JSON.parse(savedCounter);
-      idDisplay.textContent = `${counter}/${year}`;
-    }
+    restoreId();
   </script>
 </body>
 </html>
