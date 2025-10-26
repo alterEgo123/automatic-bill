@@ -1,54 +1,24 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DOCX Web Editor</title>
   <style>
-    body {
-      font-family: sans-serif;
-      margin: 2rem;
-      background: #f8f8f8;
-    }
-    #editor {
-      width: 100%;
-      min-height: 400px;
-      border: 1px solid #ccc;
-      background: white;
-      padding: 1rem;
-      margin-top: 1rem;
-    }
-    #fileInput {
-      margin-bottom: 1rem;
-    }
-    button {
-      margin-right: 1rem;
-      margin-top: 1rem;
-      padding: 8px 16px;
-    }
-    #idInput {
-      border: none;
-      border-bottom: 1px solid #aaa;
-      font-weight: bold;
-      width: 120px;
-      outline: none;
-      background: transparent;
-      margin-left: 4px;
-    }
+    body { font-family: sans-serif; margin: 2rem; background: #f8f8f8; }
+    #editor { width:100%; min-height:400px; border:1px solid #ccc; background:#fff; padding:1rem; margin-top:1rem; }
+    #idInput { border:none; border-bottom:1px solid #aaa; font-weight:bold; width:120px; outline:none; background:transparent; margin-left:4px; }
+    button { margin-right:1rem; margin-top:1rem; padding:8px 16px; }
   </style>
 </head>
 <body>
   <h2>📄 DOCX Web Editor</h2>
-  <p>
-    Upload a <code>.docx</code> file, view & edit it, generate an ID, and download.
-  </p>
+  <p>Upload a <code>.docx</code> file, edit content and ID, then download.</p>
 
-  <input type="file" id="fileInput" accept=".docx" /><br />
-  <label><strong>ID:</strong>
-    <input id="idInput" type="text" value="" />
-  </label>
+  <input type="file" id="fileInput" accept=".docx"><br>
+  <label><strong>ID:</strong> <input id="idInput" type="text" value=""></label>
 
-  <div id="editor" contenteditable="true">Upload a .docx file to start editing.</div>
+  <div id="editor" contenteditable="true">Upload a file to start editing.</div>
 
   <button id="saveBtn">💾 Download Edited DOCX</button>
 
@@ -61,55 +31,47 @@
     const idInput = document.getElementById("idInput");
     const saveBtn = document.getElementById("saveBtn");
 
-    // Get next ID (using localStorage as simple storage)
+    // Generate next ID (browser-local)
     function getNextId() {
       const year = new Date().getFullYear();
       const saved = JSON.parse(localStorage.getItem("counterData") || "{}");
       let counter = 0;
-
-      if (saved.year === year) {
-        counter = saved.counter + 1;
-      } else {
-        counter = 1;
-      }
-
+      if (saved.year === year) counter = saved.counter + 1;
+      else counter = 1;
       const newData = { year, counter };
       localStorage.setItem("counterData", JSON.stringify(newData));
       return `${counter}/${year}`;
     }
 
-    // Try to load saved counter on page load
     function restoreId() {
       const saved = JSON.parse(localStorage.getItem("counterData") || "{}");
-      if (saved.year && saved.counter)
-        idInput.value = `${saved.counter}/${saved.year}`;
+      if (saved.year && saved.counter) idInput.value = `${saved.counter}/${saved.year}`;
     }
 
-    async function loadFile(file) {
+    // Load uploaded file
+    fileInput.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
       const reader = new FileReader();
-      reader.onload = async (e) => {
-        const arrayBuffer = e.target.result;
+      reader.onload = async (ev) => {
+        const arrayBuffer = ev.target.result;
         const result = await window.mammoth.convertToHtml({ arrayBuffer });
         editor.innerHTML = result.value;
-        // Assign new auto ID
+        // Assign new ID
         idInput.value = getNextId();
       };
       reader.readAsArrayBuffer(file);
-    }
-
-    fileInput.addEventListener("change", (e) => {
-      const file = e.target.files[0];
-      if (file) loadFile(file);
     });
 
+    // Download edited DOCX
     saveBtn.addEventListener("click", async () => {
-      const { Document, Packer, Paragraph } = window.docx;
-
-      const text = editor.innerText;
-      const lines = text.split("\n").map((line) => new Paragraph(line));
+      const { Document, Packer, Paragraph, TextRun } = window.docx;
+      const textLines = editor.innerText.split("\n").map(line => new Paragraph(line));
 
       const doc = new Document({
-        sections: [{ children: [new Paragraph("ID: " + idInput.value), ...lines] }],
+        sections: [
+          { children: [new Paragraph({ children: [new TextRun({ text: "ID: " + idInput.value, bold:true })] }), ...textLines] }
+        ]
       });
 
       const blob = await Packer.toBlob(doc);
